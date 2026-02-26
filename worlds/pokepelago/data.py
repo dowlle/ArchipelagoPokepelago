@@ -81,8 +81,8 @@ POKEMON_DATA = [
     {"id": 78, "name": "Rapidash", "types": ["Fire"]},
     {"id": 79, "name": "Slowpoke", "types": ["Water", "Psychic"]},
     {"id": 80, "name": "Slowbro", "types": ["Water", "Psychic"]},
-    {"id": 81, "name": "Magnemite", "types": ["Electric"]},
-    {"id": 82, "name": "Magneton", "types": ["Electric"]},
+    {"id": 81, "name": "Magnemite", "types": ["Electric", "Steel"]},
+    {"id": 82, "name": "Magneton", "types": ["Electric", "Steel"]},
     {"id": 83, "name": "Farfetch'd", "types": ["Normal", "Flying"]},
     {"id": 84, "name": "Doduo", "types": ["Normal", "Flying"]},
     {"id": 85, "name": "Dodrio", "types": ["Normal", "Flying"]},
@@ -157,5 +157,5 @@ POKEMON_DATA = [
 GEN_1_TYPES = [
     "Normal", "Fire", "Water", "Grass", "Electric", "Ice", "Fighting", 
     "Poison", "Ground", "Flying", "Psychic", "Bug", "Rock", "Ghost", "Dragon",
-    "Fairy"
+    "Fairy", "Steel", "Dark"
 ]
