@@ -7,83 +7,72 @@ from .data import POKEMON_DATA
 from . import Rules
 
 class PokepelagoWeb(WebWorld):
-    theme = "ocean"
-    setup_en = Tutorial(
-        "Multiworld Setup Guide",
-        "A guide to setting up the Poképelago web client.",
+    tutorials = [Tutorial(
+        "Pokepelago Setup Guide",
+        "A guide to setting up the Pokepelago Archipelago world.",
         "English",
         "setup_en.md",
         "setup/en",
-        ["dowlle"]
-    )
-    tutorials = [setup_en]
+        ["stefan"]
+    )]
 
 class PokepelagoWorld(World):
     """
-    Poképelago is a Pokémon guessing game randomizer! 
-    Unlock Pokémon by finding items in a multiworld, and then guess them 
-    in the Poképelago web interface to send checks back to your friends!
+    Pokepelago: A collection-based world where you catch 'em all by guessing their names.
     """
-    
-    game = "Pokepelago"
-    web = PokepelagoWeb()
+    game: str = "Pokepelago"
     options_dataclass = PokepelagoOptions
     options: PokepelagoOptions
-    topology_present = False
-    
+    topology_present: bool = True
+    web = PokepelagoWeb()
+
     item_name_to_id = item_table
     location_name_to_id = location_table
+    
+    # We define item groups for each Pokémon type to facilitate milestone logic.
+    # A Pokémon can belong to multiple groups if it has multiple types.
     item_name_groups = {
         "Pokemon Unlocks": {f"{name} Unlock" for name in pokemon_names},
-        "Type Unlocks": {f"{p_type} Type Key" for p_type in GEN_1_TYPES}
+        "Type Unlocks": {f"{p_type} Type Key" for p_type in GEN_1_TYPES},
+        **{f"{p_type} Pokemon": {f"{mon['name']} Unlock" for mon in POKEMON_DATA if p_type in mon['types']} 
+           for p_type in GEN_1_TYPES}
     }
 
     def create_item(self, name: str) -> PokepelagoItem:
-        # We now look up the classification directly from our Items.py source of truth.
-        # This makes the code much cleaner and easier to maintain.
         data = item_data_table.get(name)
         if data:
             classification = data[1]
             item_id = data[0]
         else:
-            # Fallback for unexpected items
             classification = ItemClassification.filler
             item_id = item_table.get(name, 0)
             
         return PokepelagoItem(name, classification, item_id, self.player)
 
     def create_items(self):
-        # 1. Starting Items: We pre-collect the 3 Gen 1 starters.
-        # This ensures that even if a player doesn't have them in their YAML,
-        # they always have a few Pokémon available to guess at Sphere 0.
-        # This prevents logic locks where no Pokémon are initially catchable.
+        # 1. Provide all 3 starters and their required type keys
         starters = ["Bulbasaur", "Charmander", "Squirtle"]
-        
+        starter_types = {"Grass", "Poison", "Fire", "Water"}
+
         for name in starters:
             self.multiworld.push_precollected(self.create_item(f"{name} Unlock"))
+        
+        for p_type in starter_types:
+            self.multiworld.push_precollected(self.create_item(f"{p_type} Type Key"))
 
-        # 2. Type Locks Logic
+        # 2. Add remaining Type Keys to the pool if Type Locks are enabled
         if self.options.type_locks.value:
-            # IMPORTANT: To avoid a FillError (too many items for 151 locations),
-            # we pre-collect ALL Type Keys for now. This keeps them in logic 
-            # (letting players guess Pokémon of that type) without overflowing the 151 slots.
-            # We explicitly pre-collect them so the multiworld knows they 'exist' from start.
             for p_type in GEN_1_TYPES:
-                self.multiworld.push_precollected(self.create_item(f"{p_type} Type Key"))
+                if p_type not in starter_types:
+                    self.multiworld.itempool.append(self.create_item(f"{p_type} Type Key"))
 
-        # 3. Add remaining Pokémon unlocks to the item pool
-        # We skip the 3 starters we already gave the player.
+        # 3. Add remaining Pokémon Unlocks to the pool
         for name in pokemon_names:
             if name not in starters:
                 self.multiworld.itempool.append(self.create_item(f"{name} Unlock"))
 
-        # 4. Fill remaining slots with Useful items (Master Balls, Pokedex, etc.)
-        # Since we have 151 locations and only 148 Pokémon left to hide (151 - 3 starters),
-        # we need exactly 3 filler items to make the pool fit.
+        # 4. Fill remaining locations (including milestones and extra starts) with useful items/fillers
         total_locations = len(self.location_name_to_id)
-        
-        # We cycle through useful items like Pokedex and Pokegear to fill the gaps.
-        # These don't have logic, but make the seed feel more 'complete'.
         useful_fillers = ["Master Ball", "Pokedex", "Pokegear"]
         
         while len(self.multiworld.itempool) < total_locations:
@@ -94,16 +83,30 @@ class PokepelagoWorld(World):
         menu_region = Region("Menu", self.player, self.multiworld)
         self.multiworld.regions.append(menu_region)
 
+        # All non-guess locations (Milestones, Oak's Lab, etc.) are in Menu
         for loc_name, loc_id in self.location_name_to_id.items():
-            location = PokepelagoLocation(self.player, loc_name, loc_id, menu_region)
-            menu_region.locations.append(location)
+            if not loc_name.startswith("Guess "):
+                location = PokepelagoLocation(self.player, loc_name, loc_id, menu_region)
+                menu_region.locations.append(location)
 
-        victory_region = Region("Victory", self.player, self.multiworld)
-        self.multiworld.regions.append(victory_region)
-        
-        connection = Entrance(self.player, "Win Game", menu_region)
-        menu_region.exits.append(connection)
-        connection.connect(victory_region)
+        for mon in POKEMON_DATA:
+            mon_name = mon["name"]
+            mon_region = Region(f"Region {mon_name}", self.player, self.multiworld)
+            self.multiworld.regions.append(mon_region)
+
+            loc_name = f"Guess {mon_name}"
+            loc_id = self.location_name_to_id[loc_name]
+            location = PokepelagoLocation(self.player, loc_name, loc_id, mon_region)
+            mon_region.locations.append(location)
+
+            entrance = Entrance(self.player, f"Catch {mon_name}", menu_region)
+            menu_region.exits.append(entrance)
+            entrance.connect(mon_region)
 
     def set_rules(self):
         Rules.set_rules(self)
+
+    def fill_slot_data(self) -> dict:
+        return {
+            "type_locks": bool(self.options.type_locks.value)
+        }
