@@ -130,5 +130,6 @@ class PokepelagoWorld(World):
 
     def fill_slot_data(self) -> dict:
         return {
-            "type_locks": bool(self.options.type_locks.value)
+            "type_locks": bool(self.options.type_locks.value),
+            "pokemon_generations": self.options.pokemon_generations.value
         }

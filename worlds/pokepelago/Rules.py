@@ -38,7 +38,8 @@ def set_rules(world):
                     TYPE_OFFSETS[t] += 1
 
     # 2. Rules for Global Milestones
-    milestones = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 148]
+    milestones = [1, 5, 10] + list(range(20, 391, 10)) + [148, 248, 383]
+    milestones = sorted(list(set(milestones)))
     
     def create_global_rule(req_count):
         if use_type_locks:
