@@ -29,21 +29,30 @@ class StartingPokemon(Choice):
     default = 0
 
 
+class GoalType(Choice):
+    """How the goal is defined.
+    Percentage: guess a percentage of the selected generation (see 'Goal Percentage').
+    Count: guess a fixed number of Pokémon (see 'Goal Count')."""
+    display_name = "Goal Type"
+    option_percentage = 0
+    option_count = 1
+    default = 0
+
+
 class GoalPercentage(Range):
-    """Percentage of the selected Pokémon generation that must be guessed to complete the game.
-    For example, 100 means guess every Pokémon in the selected generation.
-    Set to 0 to use the 'Goal Count' option instead."""
+    """Percentage of the selected generation that must be guessed to complete the game.
+    Only used when 'Goal Type' is set to 'percentage'.
+    For example, 100 means guess every Pokémon in the selected generation."""
     display_name = "Goal Percentage"
-    range_start = 0
+    range_start = 1
     range_end = 100
     default = 100
 
 
 class GoalCount(Range):
     """Fixed number of Pokémon that must be guessed to complete the game.
-    Only used when 'Goal Percentage' is set to 0.
-    Must be less than or equal to the total number of Pokémon in the selected generation.
-    If set higher than the generation total, it will be capped automatically."""
+    Only used when 'Goal Type' is set to 'count'.
+    Automatically capped to the total Pokémon available in the selected generation."""
     display_name = "Goal Count"
     range_start = 1
     range_end = 386
@@ -55,5 +64,6 @@ class PokepelagoOptions(PerGameCommonOptions):
     pokemon_generations: PokemonGenerations
     type_locks: EnableTypeLocks
     starting_pokemon: StartingPokemon
+    goal_type: GoalType
     goal_percentage: GoalPercentage
     goal_count: GoalCount

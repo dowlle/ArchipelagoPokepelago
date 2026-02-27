@@ -47,12 +47,10 @@ class PokepelagoWorld(World):
         # Total new Pokémon guessable (all active minus the 3 precollected starters)
         total_guessable = len(self.active_pokemon) - 3
 
-        # Determine the raw goal count from options
-        if self.options.goal_percentage.value > 0:
-            # Percentage mode: compute from total active Pokémon, clamped to at least 1
+        # Determine raw goal count from options
+        if self.options.goal_type.value == 0:  # percentage
             raw_goal = max(1, round(len(self.active_pokemon) * self.options.goal_percentage.value / 100))
-        else:
-            # Fixed count mode, capped to total active
+        else:  # count
             raw_goal = min(self.options.goal_count.value, len(self.active_pokemon))
 
         # The goal is expressed as the number of Pokémon guessed AFTER the starters,
@@ -74,6 +72,10 @@ class PokepelagoWorld(World):
             item_id = item_table.get(name, 0)
             
         return PokepelagoItem(name, classification, item_id, self.player)
+
+    def create_event_item(self, name: str) -> PokepelagoItem:
+        """Create an event item (ID=None) for server-side goal/release tracking."""
+        return PokepelagoItem(name, ItemClassification.progression, None, self.player)
 
     def create_items(self):
         # 1. Provide all 3 starters and their required type keys
@@ -105,10 +107,10 @@ class PokepelagoWorld(World):
                 self.multiworld.itempool.append(self.create_item(f"{name} Unlock"))
                 my_items_in_pool += 1
 
-        # 4. Fill remaining locations (including milestones and extra starts) with useful items/fillers.
-        # NOTE: Precollected items do NOT occupy pool slots — every location still needs
-        # a pool item to fill it. We need exactly total_locations items in the pool.
-        total_locations = len(self.multiworld.get_locations(self.player))
+        # 4. Fill remaining locations with useful items/fillers.
+        # NOTE: event locations (ID=None, like "Pokepelago Victory") are server-side only and
+        # do NOT need a pool item — only real sendable locations need to be filled.
+        total_locations = sum(1 for loc in self.multiworld.get_locations(self.player) if loc.address is not None)
         useful_fillers = ["Master Ball", "Pokedex", "Pokegear"]
         
         while my_items_in_pool < total_locations:
@@ -157,15 +159,36 @@ class PokepelagoWorld(World):
             menu_region.exits.append(entrance)
             entrance.connect(mon_region)
 
+        # Victory event location (ID=None marks it as a server-side event, not a sendable check).
+        # The Victory item placed here is what triggers the server's release/goal-completion mechanism.
+        victory_location = PokepelagoLocation(self.player, "Pokepelago Victory", None, menu_region)
+        menu_region.locations.append(victory_location)
+
     def set_rules(self):
         Rules.set_rules(self)
 
-        # Goal: the player must reach the "Guessed <goal_count> Pokemon" milestone
-        goal_location_name = f"Guessed {self.goal_count} Pokemon"
-        goal_location = self.multiworld.get_location(goal_location_name, self.player)
-        goal_location.progress_type = goal_location.progress_type.DEFAULT  # ensure it's in logic
+        # Canonical Archipelago goal pattern: place a locked "Victory" event item at an event
+        # location whose access rule enforces the goal. The server's release/completion mechanism
+        # triggers when state.has("Victory") becomes true — can_reach() alone doesn't do this.
+        use_type_locks = self.options.type_locks.value
+        goal = self.goal_count + 3  # +3 because starters are pre-collected and also count
+
+        if use_type_locks:
+            goal_rule = lambda state: sum(
+                1 for mon in self.active_pokemon
+                if state.has(f"{mon['name']} Unlock", self.player)
+                and all(state.has(f"{t} Type Key", self.player) for t in mon["types"])
+            ) >= goal
+        else:
+            goal_rule = lambda state: state.has_group("Pokemon Unlocks", self.player, goal)
+
+        victory_location = self.multiworld.get_location("Pokepelago Victory", self.player)
+        victory_location.access_rule = goal_rule
+        victory_item = self.create_event_item("Victory")
+        victory_location.place_locked_item(victory_item)
+
         self.multiworld.completion_condition[self.player] = \
-            lambda state: state.can_reach(goal_location_name, "Location", self.player)
+            lambda state: state.has("Victory", self.player)
 
     def fill_slot_data(self) -> dict:
         return {
