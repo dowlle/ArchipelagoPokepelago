@@ -65,6 +65,11 @@ Output Logs/
 /datapackage
 /datapackage_export.json
 /custom_worlds
+/worlds/pokepelago/pokemon_data_gen3.txt
+/worlds/pokepelago/extract_pokemon.py
+/worlds/pokepelago/patch_data.py
+
+
 # stubgen output
 /out/
 
