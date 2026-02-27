@@ -1,7 +1,7 @@
 from BaseClasses import Region, Entrance, ItemClassification, Tutorial
 from worlds.AutoWorld import World, WebWorld
 from .Items import PokepelagoItem, item_table, pokemon_names, GEN_1_TYPES, item_data_table
-from .Locations import PokepelagoLocation, location_table
+from .Locations import PokepelagoLocation, location_table, milestones
 from .Options import PokepelagoOptions
 from .data import POKEMON_DATA
 from . import Rules
@@ -43,6 +43,26 @@ class PokepelagoWorld(World):
         limit = {0: 151, 1: 251, 2: 386}.get(gen_option, 151)
         self.active_pokemon = [mon for mon in POKEMON_DATA if mon["id"] <= limit]
         self.active_pokemon_names = [mon["name"] for mon in self.active_pokemon]
+
+        # Total new Pokémon guessable (all active minus the 3 precollected starters)
+        total_guessable = len(self.active_pokemon) - 3
+
+        # Determine the raw goal count from options
+        if self.options.goal_percentage.value > 0:
+            # Percentage mode: compute from total active Pokémon, clamped to at least 1
+            raw_goal = max(1, round(len(self.active_pokemon) * self.options.goal_percentage.value / 100))
+        else:
+            # Fixed count mode, capped to total active
+            raw_goal = min(self.options.goal_count.value, len(self.active_pokemon))
+
+        # The goal is expressed as the number of Pokémon guessed AFTER the starters,
+        # so we snap to the closest available "Guessed X Pokemon" milestone that is
+        # <= total_guessable. The milestones list (from Locations.py) is already sorted.
+        valid_milestones = [m for m in milestones if m <= total_guessable]
+
+        # Find the closest milestone to raw_goal (but cap at max valid milestone)
+        capped_goal = min(raw_goal, max(valid_milestones))
+        self.goal_count = min(valid_milestones, key=lambda m: abs(m - capped_goal))
 
     def create_item(self, name: str) -> PokepelagoItem:
         data = item_data_table.get(name)
@@ -140,8 +160,16 @@ class PokepelagoWorld(World):
     def set_rules(self):
         Rules.set_rules(self)
 
+        # Goal: the player must reach the "Guessed <goal_count> Pokemon" milestone
+        goal_location_name = f"Guessed {self.goal_count} Pokemon"
+        goal_location = self.multiworld.get_location(goal_location_name, self.player)
+        goal_location.progress_type = goal_location.progress_type.DEFAULT  # ensure it's in logic
+        self.multiworld.completion_condition[self.player] = \
+            lambda state: state.can_reach(goal_location_name, "Location", self.player)
+
     def fill_slot_data(self) -> dict:
         return {
             "type_locks": bool(self.options.type_locks.value),
-            "pokemon_generations": self.options.pokemon_generations.value
+            "pokemon_generations": self.options.pokemon_generations.value,
+            "goal_count": self.goal_count,
         }

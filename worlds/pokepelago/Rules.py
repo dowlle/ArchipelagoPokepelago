@@ -81,12 +81,4 @@ def set_rules(world):
             except KeyError:
                 pass
 
-    # Win Condition
-    limit = len(world.active_pokemon)
-    if use_type_locks:
-        world.multiworld.completion_condition[player] = lambda state: \
-            state.has_group("Pokemon Unlocks", player, limit) and \
-            state.has_group("Type Unlocks", player, len(GEN_1_TYPES))
-    else:
-        world.multiworld.completion_condition[player] = lambda state: \
-            state.has_group("Pokemon Unlocks", player, limit)
+
