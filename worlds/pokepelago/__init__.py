@@ -66,24 +66,35 @@ class PokepelagoWorld(World):
         for p_type in starter_types:
             self.multiworld.push_precollected(self.create_item(f"{p_type} Type Key"))
 
+        # Track items added to the pool by this player specifically.
+        # We must NOT use len(self.multiworld.itempool) because that is the global
+        # pool shared by ALL players. When other games run create_items() before us,
+        # their items inflate the count and prevent us from adding our fillers.
+        my_items_in_pool = 0
+
         # 2. Add remaining Type Keys to the pool if Type Locks are enabled
         if self.options.type_locks.value:
             for p_type in GEN_1_TYPES:
                 if p_type not in starter_types:
                     self.multiworld.itempool.append(self.create_item(f"{p_type} Type Key"))
+                    my_items_in_pool += 1
 
         # 3. Add remaining Pokémon Unlocks to the pool
         for name in self.active_pokemon_names:
             if name not in starters:
                 self.multiworld.itempool.append(self.create_item(f"{name} Unlock"))
+                my_items_in_pool += 1
 
-        # 4. Fill remaining locations (including milestones and extra starts) with useful items/fillers
+        # 4. Fill remaining locations (including milestones and extra starts) with useful items/fillers.
+        # NOTE: Precollected items do NOT occupy pool slots — every location still needs
+        # a pool item to fill it. We need exactly total_locations items in the pool.
         total_locations = len(self.multiworld.get_locations(self.player))
         useful_fillers = ["Master Ball", "Pokedex", "Pokegear"]
         
-        while len(self.multiworld.itempool) < total_locations:
-            filler_name = useful_fillers[len(self.multiworld.itempool) % len(useful_fillers)]
+        while my_items_in_pool < total_locations:
+            filler_name = useful_fillers[my_items_in_pool % len(useful_fillers)]
             self.multiworld.itempool.append(self.create_item(filler_name))
+            my_items_in_pool += 1
 
     def create_regions(self):
         menu_region = Region("Menu", self.player, self.multiworld)
