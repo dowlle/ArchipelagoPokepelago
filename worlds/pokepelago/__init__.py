@@ -104,7 +104,8 @@ class PokepelagoWorld(World):
                 count = int(parts[1])
                 p_type = parts[2]
                 type_max = sum(1 for m in self.active_pokemon if p_type in m["types"])
-                starters_of_type = sum(1 for m in self.active_pokemon[:3] if p_type in m["types"])
+                STARTER_NAMES = {"Bulbasaur", "Charmander", "Squirtle"}
+                starters_of_type = sum(1 for m in self.active_pokemon if m["name"] in STARTER_NAMES and p_type in m["types"])
                 if count > (type_max - starters_of_type):
                     continue
 
