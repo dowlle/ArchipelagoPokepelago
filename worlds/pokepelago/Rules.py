@@ -14,7 +14,7 @@ def set_rules(world):
         return lambda state: state.has(unlock_item, player)
 
     # 1. Rules for ENTRANCES
-    for mon in POKEMON_DATA:
+    for mon in world.active_pokemon:
         mon_name = mon["name"]
         unlock_item = f"{mon_name} Unlock"
         mon_types = mon["types"]
@@ -31,7 +31,7 @@ def set_rules(world):
     
     # Calculate type offsets (how many of each type we start with)
     TYPE_OFFSETS = {t: 0 for t in GEN_1_TYPES}
-    for mon in POKEMON_DATA:
+    for mon in world.active_pokemon:
         if mon["name"] in STARTER_NAMES:
             for t in mon["types"]:
                 if t in TYPE_OFFSETS:
@@ -43,7 +43,7 @@ def set_rules(world):
     def create_global_rule(req_count):
         if use_type_locks:
             return lambda state: sum(
-                1 for mon in POKEMON_DATA 
+                1 for mon in world.active_pokemon 
                 if state.has(f"{mon['name']} Unlock", player) 
                 and all(state.has(f"{t} Type Key", player) for t in mon["types"])
             ) >= req_count
@@ -63,7 +63,7 @@ def set_rules(world):
     def create_type_rule(req_type, req_count):
         if use_type_locks:
             return lambda state: sum(
-                1 for mon in POKEMON_DATA 
+                1 for mon in world.active_pokemon 
                 if req_type in mon["types"] 
                 and state.has(f"{mon['name']} Unlock", player) 
                 and all(state.has(f"{t} Type Key", player) for t in mon["types"])
@@ -81,10 +81,11 @@ def set_rules(world):
                 pass
 
     # Win Condition
+    limit = len(world.active_pokemon)
     if use_type_locks:
         world.multiworld.completion_condition[player] = lambda state: \
-            state.has_group("Pokemon Unlocks", player, 151) and \
+            state.has_group("Pokemon Unlocks", player, limit) and \
             state.has_group("Type Unlocks", player, len(GEN_1_TYPES))
     else:
         world.multiworld.completion_condition[player] = lambda state: \
-            state.has_group("Pokemon Unlocks", player, 151)
+            state.has_group("Pokemon Unlocks", player, limit)

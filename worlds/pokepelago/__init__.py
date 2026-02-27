@@ -38,6 +38,12 @@ class PokepelagoWorld(World):
            for p_type in GEN_1_TYPES}
     }
 
+    def generate_early(self):
+        gen_option = self.options.pokemon_generations.value
+        limit = {0: 151, 1: 251, 2: 386}.get(gen_option, 151)
+        self.active_pokemon = [mon for mon in POKEMON_DATA if mon["id"] <= limit]
+        self.active_pokemon_names = [mon["name"] for mon in self.active_pokemon]
+
     def create_item(self, name: str) -> PokepelagoItem:
         data = item_data_table.get(name)
         if data:
@@ -67,12 +73,12 @@ class PokepelagoWorld(World):
                     self.multiworld.itempool.append(self.create_item(f"{p_type} Type Key"))
 
         # 3. Add remaining Pokémon Unlocks to the pool
-        for name in pokemon_names:
+        for name in self.active_pokemon_names:
             if name not in starters:
                 self.multiworld.itempool.append(self.create_item(f"{name} Unlock"))
 
         # 4. Fill remaining locations (including milestones and extra starts) with useful items/fillers
-        total_locations = len(self.location_name_to_id)
+        total_locations = len(self.multiworld.get_locations(self.player))
         useful_fillers = ["Master Ball", "Pokedex", "Pokegear"]
         
         while len(self.multiworld.itempool) < total_locations:
@@ -85,11 +91,27 @@ class PokepelagoWorld(World):
 
         # All non-guess locations (Milestones, Oak's Lab, etc.) are in Menu
         for loc_name, loc_id in self.location_name_to_id.items():
-            if not loc_name.startswith("Guess "):
-                location = PokepelagoLocation(self.player, loc_name, loc_id, menu_region)
-                menu_region.locations.append(location)
+            if loc_name.startswith("Guess "):
+                continue
+                
+            if loc_name.startswith("Guessed "):
+                count = int(loc_name.split(" ")[1])
+                if count > len(self.active_pokemon) - 3:
+                    continue
+                    
+            if loc_name.startswith("Caught "):
+                parts = loc_name.split(" ")
+                count = int(parts[1])
+                p_type = parts[2]
+                type_max = sum(1 for m in self.active_pokemon if p_type in m["types"])
+                starters_of_type = sum(1 for m in self.active_pokemon[:3] if p_type in m["types"])
+                if count > (type_max - starters_of_type):
+                    continue
 
-        for mon in POKEMON_DATA:
+            location = PokepelagoLocation(self.player, loc_name, loc_id, menu_region)
+            menu_region.locations.append(location)
+
+        for mon in self.active_pokemon:
             mon_name = mon["name"]
             mon_region = Region(f"Region {mon_name}", self.player, self.multiworld)
             self.multiworld.regions.append(mon_region)

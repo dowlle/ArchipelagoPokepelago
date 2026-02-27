@@ -24,8 +24,11 @@ for mon in POKEMON_DATA:
 
 # 3. Global Milestone Locations (Rewards for total catches)
 # We start with 3 Pokémon (Bulbasaur, Charmander, Squirtle).
-# There are 151 total. Max new catches = 151 - 3 = 148.
-milestones = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 148]
+# For Gen 1 max new is 148, Gen 2 is 248, Gen 3 is 383.
+milestones = [1, 5, 10] + list(range(20, 391, 10)) + [148, 248, 383]
+# Deduplicate and sort
+milestones = sorted(list(set(milestones)))
+
 for count in milestones:
     location_table[f"Guessed {count} Pokemon"] = LOCATION_ID_OFFSET + 1000 + count
 
