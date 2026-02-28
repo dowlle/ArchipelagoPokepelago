@@ -17,20 +17,20 @@ for i, mon in enumerate(POKEMON_DATA):
 # 2. Add Type Keys (Progression)
 # If Type Locks are enabled, these are mandatory for catching Pokémon of that type.
 for i, p_type in enumerate(GEN_1_TYPES):
-    item_data_table[f"{p_type} Type Key"] = (ITEM_ID_OFFSET + 1100 + i, ItemClassification.progression)
+    item_data_table[f"{p_type} Type Key"] = (ITEM_ID_OFFSET + 2000 + i, ItemClassification.progression)
 
 # 3. Add Useful Items
 # These help the player but aren't strictly required to finish the game.
-item_data_table["Master Ball"] = (ITEM_ID_OFFSET + 2001, ItemClassification.useful)
-item_data_table["Pokedex"] = (ITEM_ID_OFFSET + 2002, ItemClassification.useful)
-item_data_table["Pokegear"] = (ITEM_ID_OFFSET + 2003, ItemClassification.useful)
+item_data_table["Master Ball"] = (ITEM_ID_OFFSET + 3001, ItemClassification.useful)
+item_data_table["Pokedex"] = (ITEM_ID_OFFSET + 3002, ItemClassification.useful)
+item_data_table["Pokegear"] = (ITEM_ID_OFFSET + 3003, ItemClassification.useful)
 
 # 4. Add Traps
 # These are meant to hinder the player.
-item_data_table["Small Shuffle Trap"] = (ITEM_ID_OFFSET + 3001, ItemClassification.trap)
-item_data_table["Big Shuffle Trap"] = (ITEM_ID_OFFSET + 3002, ItemClassification.trap)
-item_data_table["Derpy Mon Trap"] = (ITEM_ID_OFFSET + 3003, ItemClassification.trap)
-item_data_table["Release Trap"] = (ITEM_ID_OFFSET + 3004, ItemClassification.trap)
+item_data_table["Small Shuffle Trap"] = (ITEM_ID_OFFSET + 4001, ItemClassification.trap)
+item_data_table["Big Shuffle Trap"] = (ITEM_ID_OFFSET + 4002, ItemClassification.trap)
+item_data_table["Derpy Mon Trap"] = (ITEM_ID_OFFSET + 4003, ItemClassification.trap)
+item_data_table["Release Trap"] = (ITEM_ID_OFFSET + 4004, ItemClassification.trap)
 
 # For backward compatibility with other files that might still use item_table (name -> id)
 item_table = {name: data[0] for name, data in item_data_table.items()}

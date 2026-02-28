@@ -1,5 +1,3 @@
-# Centrally managed Pokémon data for the Pokepelago Archipelago world.
-
 POKEMON_DATA = [
     {"id": 1, "name": "Bulbasaur", "types": ["Grass", "Poison"]},
     {"id": 2, "name": "Ivysaur", "types": ["Grass", "Poison"]},
@@ -1026,10 +1024,4 @@ POKEMON_DATA = [
     {"id": 1023, "name": "Iron Crown", "types": ["Steel", "Psychic"]},
     {"id": 1024, "name": "Terapagos", "types": ["Normal"]},
     {"id": 1025, "name": "Pecharunt", "types": ["Poison", "Ghost"]},
-]
-
-GEN_1_TYPES = [
-    "Normal", "Fire", "Water", "Grass", "Electric", "Ice", "Fighting", 
-    "Poison", "Ground", "Flying", "Psychic", "Bug", "Rock", "Ghost", "Dragon",
-    "Fairy", "Steel", "Dark"
 ]

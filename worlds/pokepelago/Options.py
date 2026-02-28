@@ -12,11 +12,23 @@ class PokemonGenerations(Choice):
     """Select how many generations of Pokémon to include in the randomizer.
     Gen 1 (Kanto) = 151
     Gen 2 (Johto) = 251 
-    Gen 3 (Hoenn) = 386"""
+    Gen 3 (Hoenn) = 386
+    Gen 4 (Sinnoh) = 493
+    Gen 5 (Unova) = 649
+    Gen 6 (Kalos) = 721
+    Gen 7 (Alola) = 809
+    Gen 8 (Galar) = 898
+    Gen 9 (Paldea) = 1025"""
     display_name = "Pokemon Generations"
     option_gen1 = 0
     option_gen2 = 1
     option_gen3 = 2
+    option_gen4 = 3
+    option_gen5 = 4
+    option_gen6 = 5
+    option_gen7 = 6
+    option_gen8 = 7
+    option_gen9 = 8
     default = 0
 
 
@@ -55,7 +67,7 @@ class GoalCount(Range):
     Automatically capped to the total Pokémon available in the selected generation."""
     display_name = "Goal Count"
     range_start = 1
-    range_end = 386
+    range_end = 1025
     default = 151
 
 

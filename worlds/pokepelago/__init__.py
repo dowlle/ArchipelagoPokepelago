@@ -1,5 +1,6 @@
 from BaseClasses import Region, Entrance, ItemClassification, Tutorial
 from worlds.AutoWorld import World, WebWorld
+from rule_builder.cached_world import CachedRuleBuilderWorld
 from .Items import PokepelagoItem, item_table, pokemon_names, GEN_1_TYPES, item_data_table
 from .Locations import PokepelagoLocation, location_table, milestones
 from .Options import PokepelagoOptions
@@ -13,10 +14,10 @@ class PokepelagoWeb(WebWorld):
         "English",
         "setup_en.md",
         "setup/en",
-        ["stefan"]
+        ["Appie"]
     )]
 
-class PokepelagoWorld(World):
+class PokepelagoWorld(CachedRuleBuilderWorld):
     """
     Pokepelago: A collection-based world where you catch 'em all by guessing their names.
     """
@@ -40,7 +41,17 @@ class PokepelagoWorld(World):
 
     def generate_early(self):
         gen_option = self.options.pokemon_generations.value
-        limit = {0: 151, 1: 251, 2: 386}.get(gen_option, 151)
+        limit = {
+            0: 151,
+            1: 251,
+            2: 386,
+            3: 493,
+            4: 649,
+            5: 721,
+            6: 809,
+            7: 898,
+            8: 1025
+        }.get(gen_option, 151)
         self.active_pokemon = [mon for mon in POKEMON_DATA if mon["id"] <= limit]
         self.active_pokemon_names = [mon["name"] for mon in self.active_pokemon]
 

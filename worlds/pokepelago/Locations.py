@@ -2,7 +2,7 @@ from BaseClasses import Location
 from .data import POKEMON_DATA, GEN_1_TYPES
 
 # Shifted away from item IDs (8574000) to prevent collisions.
-LOCATION_ID_OFFSET = 8571000
+LOCATION_ID_OFFSET = 8560000
 
 # We create a dictionary of all the locations where items can be hidden.
 location_table = {}
@@ -16,7 +16,7 @@ starting_locations = [
     "Lift Key (Replica)", "Silph Scope (Replica)", "Poke Flute (Replica)", "Item Finder (Replica)"
 ]
 for i, name in enumerate(starting_locations):
-    location_table[name] = LOCATION_ID_OFFSET + 500 + i
+    location_table[name] = LOCATION_ID_OFFSET + 100_000 + i
 
 # 2. Pokémon Guess Locations (The core grid)
 for mon in POKEMON_DATA:
@@ -24,13 +24,14 @@ for mon in POKEMON_DATA:
 
 # 3. Global Milestone Locations (Rewards for total catches)
 # We start with 3 Pokémon (Bulbasaur, Charmander, Squirtle).
-# For Gen 1 max new is 148, Gen 2 is 248, Gen 3 is 383.
-milestones = [1, 5, 10] + list(range(20, 391, 10)) + [148, 248, 383]
+# For Gen 1 max new is 148, Gen 2 is 248, Gen 3 is 383, Gen 4 is 490, Gen 5 is 646, 
+# Gen 6 is 718, Gen 7 is 806, Gen 8 is 895, Gen 9 is 1022.
+milestones = [1, 5, 10] + list(range(20, 1031, 10)) + [148, 248, 383, 490, 646, 718, 806, 895, 1022]
 # Deduplicate and sort
 milestones = sorted(list(set(milestones)))
 
 for count in milestones:
-    location_table[f"Guessed {count} Pokemon"] = LOCATION_ID_OFFSET + 1000 + count
+    location_table[f"Guessed {count} Pokemon"] = LOCATION_ID_OFFSET + 10_000 + count
 
 # 4. Type-Specific Milestones
 # Calculate how many of each type exist.
@@ -54,7 +55,7 @@ for p_type in GEN_1_TYPES:
     max_new = type_counts[p_type] - starter_type_counts.get(p_type, 0)
     for step in milestone_steps:
         if step <= max_new:
-            location_table[f"Caught {step} {p_type} Pokemon"] = LOCATION_ID_OFFSET + 2000 + (GEN_1_TYPES.index(p_type) * 50) + step
+            location_table[f"Caught {step} {p_type} Pokemon"] = LOCATION_ID_OFFSET + 20_000 + (GEN_1_TYPES.index(p_type) * 1000) + step
 
 class PokepelagoLocation(Location):
     game: str = "Pokepelago"
