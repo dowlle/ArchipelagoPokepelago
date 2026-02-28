@@ -117,6 +117,8 @@ class PokepelagoWorld(CachedRuleBuilderWorld):
             if name not in starters:
                 self.multiworld.itempool.append(self.create_item(f"{name} Unlock"))
                 my_items_in_pool += 1
+                
+        print(f"MY ITEMS IN POOL AFTER POKEMON: {my_items_in_pool}")
 
         # 4. Fill remaining locations with useful items/fillers and traps.
         # NOTE: event locations (ID=None, like "Pokepelago Victory") are server-side only and

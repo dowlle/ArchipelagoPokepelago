@@ -16,20 +16,20 @@ class HasGuessablePokemon(Rule["PokepelagoWorld"], game="Pokepelago"):
     req_type: str | None = None
 
     def _instantiate(self, world: "PokepelagoWorld") -> Rule.Resolved:
-        # Pre-calculate the required items for each relevant pokemon to speed up _evaluate
-        relevant_mons = []
+        # Pre-calculate the required items, grouping pokemon by their required type keys to drastically speed up _evaluate
+        mons_by_type_req: dict[tuple[str, ...], list[str]] = {}
         for mon in world.active_pokemon:
             if self.req_type and self.req_type not in mon["types"]:
                 continue
             unlock_item = f"{mon['name']} Unlock"
             type_keys = tuple(f"{t} Type Key" for t in mon["types"])
-            relevant_mons.append((unlock_item, type_keys))
+            mons_by_type_req.setdefault(type_keys, []).append(unlock_item)
 
         return self.Resolved(
             req_count=self.req_count,
             req_type=self.req_type,
             use_type_locks=bool(world.options.type_locks.value),
-            relevant_mons=tuple(relevant_mons),
+            mons_by_type_req=tuple((k, tuple(v)) for k, v in mons_by_type_req.items()),
             player=world.player,
             caching_enabled=True
         )
@@ -38,7 +38,7 @@ class HasGuessablePokemon(Rule["PokepelagoWorld"], game="Pokepelago"):
         req_count: int
         req_type: str | None
         use_type_locks: bool
-        relevant_mons: tuple[tuple[str, tuple[str, ...]], ...]
+        mons_by_type_req: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...]
 
         def _evaluate(self, state: "CollectionState") -> bool:
             if not self.use_type_locks:
@@ -50,21 +50,25 @@ class HasGuessablePokemon(Rule["PokepelagoWorld"], game="Pokepelago"):
                     
             # Slower path when type locks are enabled
             count = 0
-            for unlock_item, type_keys in self.relevant_mons:
-                if state.has(unlock_item, self.player):
-                    if all(state.has(t_key, self.player) for t_key in type_keys):
-                        count += 1
-                        if count >= self.req_count:
-                            return True
+            for type_keys, unlock_items in self.mons_by_type_req:
+                # If we have all required Type Keys for this group of Pokemon...
+                if all(state.has(t_key, self.player) for t_key in type_keys):
+                    # ...then iterate over the Pokemon realistically available to check Unlocks
+                    for item in unlock_items:
+                        if state.has(item, self.player):
+                            count += 1
+                            if count >= self.req_count:
+                                return True
             return False
 
         def item_dependencies(self) -> dict[str, set[int]]:
             deps: dict[str, set[int]] = {}
-            for unlock_item, type_keys in self.relevant_mons:
-                deps.setdefault(unlock_item, set()).add(id(self))
+            for type_keys, unlock_items in self.mons_by_type_req:
                 if self.use_type_locks:
                     for t_key in type_keys:
                         deps.setdefault(t_key, set()).add(id(self))
+                for unlock_item in unlock_items:
+                    deps.setdefault(unlock_item, set()).add(id(self))
             return deps
 
 
