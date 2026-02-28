@@ -59,6 +59,15 @@ class GoalCount(Range):
     default = 151
 
 
+class TrapChance(Range):
+    """Percentage chance (0-100) that a filler item slot will be replaced by a trap item.
+    0 means no traps; 100 means all filler items will be traps."""
+    display_name = "Trap Chance"
+    range_start = 0
+    range_end = 100
+    default = 25
+
+
 @dataclass
 class PokepelagoOptions(PerGameCommonOptions):
     pokemon_generations: PokemonGenerations
@@ -67,3 +76,4 @@ class PokepelagoOptions(PerGameCommonOptions):
     goal_type: GoalType
     goal_percentage: GoalPercentage
     goal_count: GoalCount
+    trap_chance: TrapChance

@@ -107,14 +107,23 @@ class PokepelagoWorld(World):
                 self.multiworld.itempool.append(self.create_item(f"{name} Unlock"))
                 my_items_in_pool += 1
 
-        # 4. Fill remaining locations with useful items/fillers.
+        # 4. Fill remaining locations with useful items/fillers and traps.
         # NOTE: event locations (ID=None, like "Pokepelago Victory") are server-side only and
         # do NOT need a pool item — only real sendable locations need to be filled.
         total_locations = sum(1 for loc in self.multiworld.get_locations(self.player) if loc.address is not None)
         useful_fillers = ["Master Ball", "Pokedex", "Pokegear"]
+        trap_fillers = ["Small Shuffle Trap", "Big Shuffle Trap", "Derpy Mon Trap", "Release Trap"]
+        
+        trap_chance = self.options.trap_chance.value
         
         while my_items_in_pool < total_locations:
-            filler_name = useful_fillers[my_items_in_pool % len(useful_fillers)]
+            if self.random.randint(1, 100) <= trap_chance:
+                # Add a trap
+                filler_name = self.random.choice(trap_fillers)
+            else:
+                # Add a useful item
+                filler_name = useful_fillers[my_items_in_pool % len(useful_fillers)]
+                
             self.multiworld.itempool.append(self.create_item(filler_name))
             my_items_in_pool += 1
 

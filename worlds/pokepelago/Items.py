@@ -25,6 +25,13 @@ item_data_table["Master Ball"] = (ITEM_ID_OFFSET + 2001, ItemClassification.usef
 item_data_table["Pokedex"] = (ITEM_ID_OFFSET + 2002, ItemClassification.useful)
 item_data_table["Pokegear"] = (ITEM_ID_OFFSET + 2003, ItemClassification.useful)
 
+# 4. Add Traps
+# These are meant to hinder the player.
+item_data_table["Small Shuffle Trap"] = (ITEM_ID_OFFSET + 3001, ItemClassification.trap)
+item_data_table["Big Shuffle Trap"] = (ITEM_ID_OFFSET + 3002, ItemClassification.trap)
+item_data_table["Derpy Mon Trap"] = (ITEM_ID_OFFSET + 3003, ItemClassification.trap)
+item_data_table["Release Trap"] = (ITEM_ID_OFFSET + 3004, ItemClassification.trap)
+
 # For backward compatibility with other files that might still use item_table (name -> id)
 item_table = {name: data[0] for name, data in item_data_table.items()}
 pokemon_names = [mon["name"] for mon in POKEMON_DATA]
