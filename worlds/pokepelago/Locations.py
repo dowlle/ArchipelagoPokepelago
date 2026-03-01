@@ -23,12 +23,11 @@ for mon in POKEMON_DATA:
     location_table[f"Guess {mon['name']}"] = LOCATION_ID_OFFSET + mon["id"]
 
 # 3. Global Milestone Locations (Rewards for total catches)
-# We start with 3 Pokémon (Bulbasaur, Charmander, Squirtle).
-# For Gen 1 max new is 148, Gen 2 is 248, Gen 3 is 383, Gen 4 is 490, Gen 5 is 646, 
-# Gen 6 is 718, Gen 7 is 806, Gen 8 is 895, Gen 9 is 1022.
-milestones = [1, 5, 10] + list(range(20, 1031, 10)) + [148, 248, 383, 490, 646, 718, 806, 895, 1022]
-# Deduplicate and sort
-milestones = sorted(list(set(milestones)))
+# Optimized Tapered milestones: Dense early (for randomizer stepping stones), sparse late (for sphere depth compression).
+GLOBAL_MILESTONES = [1, 2, 5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100, 150, 250, 400, 600, 800, 1000]
+# Specific Max-Pokemon milestones (Gen-specific goals)
+goal_milestones = [148, 248, 383, 490, 646, 718, 806, 895, 1022]
+milestones = sorted(list(set(GLOBAL_MILESTONES + goal_milestones)))
 
 for count in milestones:
     location_table[f"Guessed {count} Pokemon"] = LOCATION_ID_OFFSET + 10_000 + count
@@ -49,7 +48,8 @@ starter_type_counts = {
     "Water": 1
 }
 
-milestone_steps = [1, 2, 5, 10, 15, 20, 30, 40, 50]
+TYPE_MILESTONE_STEPS = [1, 2, 5, 10, 20, 35, 50]
+milestone_steps = TYPE_MILESTONE_STEPS
 for p_type in GEN_1_TYPES:
     # Max NEW catches = Total in type - starters in that type
     max_new = type_counts[p_type] - starter_type_counts.get(p_type, 0)
