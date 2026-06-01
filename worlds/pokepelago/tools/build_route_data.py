@@ -24,6 +24,23 @@ except ImportError:
     sys.exit(1)
 
 GRAPHQL_URL = "https://beta.pokeapi.co/graphql/v1beta"
+
+# Marker for the hand-maintained tail of route_data.py (ROUTE_GROUPS, ROUTE_TO_GROUP,
+# compute_badge_requirement + helpers). The generator does not emit those sections;
+# _read_preserved_tail copies everything from this line to EOF forward on regen.
+TAIL_SENTINEL = "# ==== HAND-MAINTAINED TAIL (preserved across build_route_data.py regen) ===="
+
+
+def _read_preserved_tail(output_path: "Path") -> "str | None":
+    """Return the hand-maintained tail (sentinel line through EOF) of an existing
+    route_data.py, or None if the file or the sentinel is missing."""
+    if not output_path.exists():
+        return None
+    existing = output_path.read_text(encoding="utf-8")
+    idx = existing.find(TAIL_SENTINEL)
+    if idx == -1:
+        return None
+    return existing[idx:]
 MAX_POKEMON_ID = 1025
 
 # Region dex ranges (mirrors data.py)
@@ -110,6 +127,7 @@ def fetch_all_species() -> list[dict]:
             is_legendary
             is_mythical
             evolution_chain_id
+            evolves_from_species_id
         }
     }
     """
@@ -262,12 +280,14 @@ def process_species(raw_species: list[dict]) -> tuple[
     set[int],                  # legendary_ids
     set[int],                  # mythical_ids
     dict[int, int],            # species_to_chain: species_id → evolution_chain_id
+    dict[int, int],            # pre_evolution: species_id → immediate pre-evo species_id
 ]:
-    """Extract species flags and chain mappings."""
+    """Extract species flags, chain mappings, and the immediate pre-evolution map."""
     baby_ids: set[int] = set()
     legendary_ids: set[int] = set()
     mythical_ids: set[int] = set()
     species_to_chain: dict[int, int] = {}
+    pre_evolution: dict[int, int] = {}
 
     for sp in raw_species:
         sid = sp["id"]
@@ -279,8 +299,13 @@ def process_species(raw_species: list[dict]) -> tuple[
             mythical_ids.add(sid)
         if sp["evolution_chain_id"]:
             species_to_chain[sid] = sp["evolution_chain_id"]
+        # Immediate parent in the evolution line (None for base forms). Used by
+        # compute_badge_requirement to keep badge gates monotone within a line.
+        parent = sp.get("evolves_from_species_id")
+        if parent and sid <= MAX_POKEMON_ID and parent <= MAX_POKEMON_ID:
+            pre_evolution[sid] = parent
 
-    return baby_ids, legendary_ids, mythical_ids, species_to_chain
+    return baby_ids, legendary_ids, mythical_ids, species_to_chain, pre_evolution
 
 
 def process_evolutions(
@@ -291,6 +316,7 @@ def process_evolutions(
     dict[int, int],             # family_base: any_id → base_id
     set[int],                   # trade_evo_ids
     dict[str, set[int]],        # stone_evo_groups
+    dict[int, int],             # evolution_min_level: evolved_id → min level (level-up evos only)
 ]:
     """Build evolution families, identify trade evos and stone evos."""
     # Group species by chain_id to build families
@@ -308,9 +334,10 @@ def process_evolutions(
         for pid in members:
             family_base[pid] = base_id
 
-    # Extract trade evos and stone evos from evolution triggers
+    # Extract trade evos, stone evos, and level-up evolution levels from triggers
     trade_evo_ids: set[int] = set()
     stone_evo_groups: dict[str, set[int]] = defaultdict(set)
+    evolution_min_level: dict[int, int] = {}
 
     for evo in raw_evolutions:
         evolved_id = evo["evolved_species_id"]
@@ -329,7 +356,17 @@ def process_evolutions(
         if trigger_name == "use-item" and item_name in STONE_MAP:
             stone_evo_groups[STONE_MAP[item_name]].add(evolved_id)
 
-    return families, family_base, trade_evo_ids, dict(stone_evo_groups)
+        # Level required for a level-up evolution. Only level-up evolutions with an
+        # explicit min_level get an entry; stone/trade/friendship/other-trigger
+        # evolutions are intentionally absent (they have no level gate, so the
+        # evolved form simply inherits its pre-evolution's badge tier). When a
+        # species has multiple level-up rows, keep the lowest level.
+        if trigger_name == "level-up" and evo.get("min_level"):
+            lvl = evo["min_level"]
+            if evolved_id not in evolution_min_level or lvl < evolution_min_level[evolved_id]:
+                evolution_min_level[evolved_id] = lvl
+
+    return families, family_base, trade_evo_ids, dict(stone_evo_groups), evolution_min_level
 
 
 # ── Output writers ───────────────────────────────────────────────────────────
@@ -345,6 +382,8 @@ def write_route_data(
     legendary_ids: set[int],
     mythical_ids: set[int],
     orphans_by_region: dict[str, set[int]],
+    pre_evolution: dict[int, int],
+    evolution_min_level: dict[int, int],
 ) -> None:
     """Write the generated route_data.py file."""
     output_path = Path(__file__).parent.parent / "route_data.py"
@@ -401,6 +440,21 @@ def write_route_data(
         lines += [f"    {pid}: {family_base[pid]},"]
     lines += ["}", ""]
 
+    # Immediate pre-evolution map (species_id -> the species it evolves FROM).
+    # Base forms are absent. Drives the monotone clamp in compute_badge_requirement.
+    lines += ["", "# Any Pokemon ID -> the species ID it evolves directly FROM (base forms absent)"]
+    lines += ["PRE_EVOLUTION: dict[int, int] = {"]
+    for pid in sorted(pre_evolution.keys()):
+        lines += [f"    {pid}: {pre_evolution[pid]},"]
+    lines += ["}", ""]
+
+    # Level required for level-up evolutions (stone/trade/friendship evos absent).
+    lines += ["", "# Evolved Pokemon ID -> level required for a level-up evolution (level-up evos only)"]
+    lines += ["EVOLUTION_MIN_LEVEL: dict[int, int] = {"]
+    for pid in sorted(evolution_min_level.keys()):
+        lines += [f"    {pid}: {evolution_min_level[pid]},"]
+    lines += ["}", ""]
+
     # API-derived categorization sets
     lines += ["", "# ── API-derived categorization sets ──"]
     lines += ["# Auto-generated from PokeAPI. Compare with hand-maintained sets in data.py.", ""]
@@ -427,8 +481,22 @@ def write_route_data(
     _write_frozenset(lines, "ORPHAN_IDS", all_orphans)
     lines += [""]
 
-    output_path.write_text("\n".join(lines), encoding="utf-8")
-    print(f"\nWrote {output_path} ({len(lines)} lines)")
+    # Preserve the hand-maintained tail (ROUTE_GROUPS, ROUTE_TO_GROUP, and
+    # compute_badge_requirement + helpers). The generator does NOT emit those, so
+    # without this they would be wiped on every regen. Everything from the sentinel
+    # line to EOF in the existing file is copied forward verbatim.
+    tail = _read_preserved_tail(output_path)
+    if tail is None:
+        raise SystemExit(
+            f"ERROR: {output_path} has no '{TAIL_SENTINEL}' sentinel.\n"
+            f"The generator does not emit ROUTE_GROUPS / ROUTE_TO_GROUP / "
+            f"compute_badge_requirement; writing now would drop them. Restore the "
+            f"sentinel and the hand-maintained tail in route_data.py first, then re-run."
+        )
+
+    generated = "\n".join(lines).rstrip("\n")
+    output_path.write_text(generated + "\n\n" + tail, encoding="utf-8")
+    print(f"\nWrote {output_path} (generated {len(lines)} lines + preserved tail)")
 
 
 def _write_frozenset(lines: list[str], name: str, ids: set[int]) -> None:
@@ -692,10 +760,10 @@ def main() -> None:
         print(f"  Total: {len(routes)} routes, {len(pokemon_routes)} Pokemon with encounters")
 
     print("\nProcessing species...")
-    baby_ids, legendary_ids, mythical_ids, species_to_chain = process_species(raw_species)
+    baby_ids, legendary_ids, mythical_ids, species_to_chain, pre_evolution = process_species(raw_species)
 
     print("Processing evolutions...")
-    families, family_base, trade_evo_ids, stone_evo_groups = process_evolutions(
+    families, family_base, trade_evo_ids, stone_evo_groups, evolution_min_level = process_evolutions(
         raw_evolutions, species_to_chain
     )
     print(f"  {len(families)} families, {len(trade_evo_ids)} trade evos, {len(stone_evo_groups)} stone types")
@@ -734,7 +802,7 @@ def main() -> None:
     # Write
     write_route_data(routes, pokemon_routes, families, family_base,
                      trade_evo_ids, stone_evo_groups, baby_ids, legendary_ids,
-                     mythical_ids, orphans_by_region)
+                     mythical_ids, orphans_by_region, pre_evolution, evolution_min_level)
 
     write_validation_report(trade_evo_ids, stone_evo_groups, baby_ids,
                             legendary_ids, mythical_ids)
