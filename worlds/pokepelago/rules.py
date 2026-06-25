@@ -53,6 +53,7 @@ class CanAccessNPokemon(Rule["PokepelagoWorld"], game="Pokepelago"):
         return self.Resolved(
             target_count=self.target_count,
             req_groups=frozen_groups,
+            group_key=self.group_key,
             player=world.player,
             caching_enabled=getattr(world, "rule_caching_enabled", False),
         )
@@ -61,12 +62,32 @@ class CanAccessNPokemon(Rule["PokepelagoWorld"], game="Pokepelago"):
         target_count: int
         req_groups: tuple
         """Tuple of (region_req, type_reqs, extra_reqs, route_reqs, line_req, count) buckets."""
+        group_key: str = "global"
+        """Which milestone group this rule counts ('global' or a type name). Used to
+        read the matching incrementally-maintained counter (LEVER 1)."""
 
         force_recalculate: ClassVar[bool] = True
-        """Milestone rules depend on aggregate item state — always re-evaluate."""
+        """Milestone rules depend on aggregate item state — always re-evaluate.
+        (Only relevant if the world used the rule_builder cache; it does not.
+        LEVER 1 maintains its own O(1) counter instead.)"""
 
         @override
         def _evaluate(self, state: CollectionState) -> bool:
+            # LEVER 1: O(1) read of the incrementally-maintained accessible counter.
+            # The counter is kept current by PokepelagoWorld.collect/remove via the
+            # PokepelagoLogicMixin (logic_mixin.py). pp_ensure lazily runs a one-time
+            # full scan if this state's counter is not initialized yet. If the world
+            # has no index built (only before set_rules, where milestone rules are
+            # never evaluated), pp_ensure returns False and we fall back to the scan.
+            from .logic_mixin import pp_ensure
+            world = state.multiworld.worlds[self.player]
+            if pp_ensure(state, world, self.player):
+                return state.pp_accessible[self.player][self.group_key] >= self.target_count
+            return self._scan_evaluate(state)
+
+        def _scan_evaluate(self, state: CollectionState) -> bool:
+            """Original per-call bucket scan. Kept as the pre-index fallback and as the
+            arithmetic oracle the incremental counter is validated against."""
             accessible = 0
             prog = state.prog_items[self.player]
             for region_req, type_reqs, extra_reqs, route_reqs, line_req, count in self.req_groups:

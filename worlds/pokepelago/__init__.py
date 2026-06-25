@@ -1,7 +1,7 @@
 from collections import Counter
 from typing import Any
 
-from BaseClasses import Region, Entrance, ItemClassification, Tutorial
+from BaseClasses import Region, Entrance, ItemClassification, Tutorial, CollectionState
 from rule_builder.rules import Has, HasAll, HasAllCounts, HasAny
 from worlds.AutoWorld import World, WebWorld
 from .Items import (PokepelagoItem, item_table, item_data_table, GEN_1_TYPES, FILLER_ITEM_CATEGORIES,
@@ -16,6 +16,10 @@ from .data import (POKEMON_DATA, GAME_REGIONS, GAME_GENERATIONS, REGION_RANGES, 
 from .route_data import (ROUTE_DATA, ROUTE_GROUPS, ROUTE_TO_GROUP, POKEMON_ROUTES,
                          FAMILY_BASE, BADGE_LEVEL_THRESHOLDS, compute_badge_requirement)
 from .rules import CanAccessNPokemon
+# LEVER 1: importing logic_mixin registers PokepelagoLogicMixin via AutoLogicRegister
+# (it must be imported before any CollectionState is constructed) and exposes the
+# index builder + incremental-update helpers used by collect/remove below.
+from .logic_mixin import build_pp_index, pp_apply
 
 # Derive from GAME_REGIONS so it stays in sync automatically
 _REGION_BY_INDEX: dict[int, str] = {i + 1: r for i, r in enumerate(GAME_REGIONS)}
@@ -70,33 +74,32 @@ class PokepelagoWorld(World):
         self._select_active_regions()
         self._prune_invalid_gates()
 
-        # Auto-disable line_locks when it would create too many progression items.
-        # Line locks add one progression item per evolution family, which can overwhelm
-        # the fill algorithm when combined with other locks or on small region pools.
-        if o.line_locks.value:
+        # Line locks and route locks compose independently and are no longer auto-disabled:
+        # route locks gate by where a Pokemon is found, line locks gate by evolution family.
+        # (T1) The old "redundant with route_locks_enabled" kill was a correctness bug: the
+        # two gating axes are orthogonal, not redundant. (T2) The 55% progression-vs-location
+        # heuristic now only *warns*; it never silently mutates the user's chosen options.
+        # The L1 incremental accessible-counter makes the honest all-locks config cheap to
+        # generate, so neither workaround is needed for performance any longer.
+        if o.line_locks.value and not o.route_locks_enabled.value:
             import logging
-            # Always disable when route locks is also on (redundant gating)
-            if o.route_locks_enabled.value:
-                logging.warning("Pokepelago: line_locks auto-disabled (redundant with route_locks_enabled)")
-                o.line_locks.value = 0
-            else:
-                # Estimate progression item count vs location count.
-                # If line unlocks would push progression above 55% of locations, disable.
-                active_ids = set()
-                for region in self.active_regions:
-                    lo, hi = REGION_RANGES[region]
-                    active_ids.update(m["id"] for m in POKEMON_DATA if lo <= m["id"] <= hi)
-                n_families = len({FAMILY_BASE.get(pid, pid) for pid in active_ids})
-                n_locations = len(active_ids) + 30  # dexsanity locations + ~30 milestones
-                # Estimate other progression: ~18 type keys + ~9 region passes + ~20 gates
-                est_other_prog = 47 if len(self.active_regions) > 1 else 20
-                est_total_prog = n_families + est_other_prog
-                if est_total_prog > n_locations * 0.55:
-                    logging.warning(
-                        f"Pokepelago: line_locks auto-disabled (estimated {est_total_prog} progression "
-                        f"items vs {n_locations} locations = {est_total_prog/n_locations:.0%}, max 55%)"
-                    )
-                    o.line_locks.value = 0
+            # Estimate progression item count vs location count and warn (no mutation).
+            # If line unlocks push progression above 55% of locations, fill may struggle.
+            active_ids = set()
+            for region in self.active_regions:
+                lo, hi = REGION_RANGES[region]
+                active_ids.update(m["id"] for m in POKEMON_DATA if lo <= m["id"] <= hi)
+            n_families = len({FAMILY_BASE.get(pid, pid) for pid in active_ids})
+            n_locations = len(active_ids) + 30  # dexsanity locations + ~30 milestones
+            # Estimate other progression: ~18 type keys + ~9 region passes + ~20 gates
+            est_other_prog = 47 if len(self.active_regions) > 1 else 20
+            est_total_prog = n_families + est_other_prog
+            if est_total_prog > n_locations * 0.55:
+                logging.warning(
+                    f"Pokepelago: line_locks is on with an estimated {est_total_prog} progression "
+                    f"items vs {n_locations} locations = {est_total_prog/n_locations:.0%} (over 55%); "
+                    f"fill may be tight. Options left as chosen."
+                )
 
         self._select_starter()
         self._compute_goal_count()
@@ -480,6 +483,11 @@ class PokepelagoWorld(World):
             t: sum(counter.values()) for t, counter in type_req_counters.items()
         }
 
+        # LEVER 1: build the static reverse index (item -> bucket conditions) that
+        # lets collect/remove maintain the running accessible-Pokemon counter in O(1)
+        # amortized instead of re-scanning all buckets on every _evaluate.
+        build_pp_index(self)
+
     def _extra_reqs(self, mon_id: int) -> frozenset:
         """Return extra gate requirements for a Pokemon beyond region/type/route/line locks.
 
@@ -545,6 +553,35 @@ class PokepelagoWorld(World):
 
     def create_event_item(self, name: str) -> PokepelagoItem:
         return PokepelagoItem(name, ItemClassification.progression, None, self.player)
+
+    # ── LEVER 1: incremental accessible-counter maintenance ──────────────────────
+    # Override collect/remove to keep state.pp_accessible[player][group_key] current.
+    # We snapshot the item's count around the base implementation so the delta is
+    # exact even for progressive/multi-count items, then flip only the buckets that
+    # reference this item. State containers live on CollectionState (the LogicMixin);
+    # the static reverse index lives on the world (self._pp_index).
+
+    def collect(self, state: "CollectionState", item: PokepelagoItem) -> bool:
+        prog = state.prog_items[self.player]
+        before = prog.get(item.name, 0)
+        changed = super().collect(state, item)
+        if changed:
+            after = prog.get(item.name, 0)
+            delta = after - before
+            if delta:
+                pp_apply(state, self, self.player, item.name, delta)
+        return changed
+
+    def remove(self, state: "CollectionState", item: PokepelagoItem) -> bool:
+        prog = state.prog_items[self.player]
+        before = prog.get(item.name, 0)
+        changed = super().remove(state, item)
+        if changed:
+            after = prog.get(item.name, 0)
+            delta = after - before
+            if delta:
+                pp_apply(state, self, self.player, item.name, delta)
+        return changed
 
     # ── Item pool creation ──────────────────────────────────────────────────────
 

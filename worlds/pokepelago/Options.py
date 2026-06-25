@@ -46,7 +46,17 @@ class StartingLocationCount(Range):
 
 class Regions(OptionSet):
     """Which game regions to include. Each region adds its Pokemon to the pool.
-    At least one region is always active (defaults to Kanto if empty).
+
+    Provide a YAML list of region names, for example:
+        regions:
+          - Kanto
+          - Johto
+          - Hoenn
+    (Inline form also works: regions: [Kanto, Johto, Hoenn].)
+
+    At least one region is always active (defaults to Kanto if the list is empty).
+    This manual list is honored by default. It is ONLY ignored if you set
+    'random_region_count' to a non-zero value, which randomizes the regions instead.
     Valid regions: Kanto, Johto, Hoenn, Sinnoh, Unova, Kalos, Alola, Galar, Hisui, Paldea."""
     display_name = "Regions"
     valid_keys = frozenset(GAME_REGIONS)
@@ -54,9 +64,11 @@ class Regions(OptionSet):
 
 
 class RandomRegionCount(NamedRange):
-    """Override the Regions option with a random selection.
-    Set to 0 (or disabled) to use the manual Regions list (this is the default).
-    Set to 1-10 to randomly pick that many regions (or generations if grouping is on).
+    """Override the manual Regions list with a random selection.
+    Set to 0 (or disabled) to use the manual Regions list above (THIS IS THE DEFAULT,
+    so your 'regions:' list is honored unless you change this).
+    Set to 1-10 to ignore the manual list and randomly pick that many regions
+    (or generations if grouping is on).
     Set to random to also randomize how many are picked.
     When 'Group Hisui & Galar' is enabled, this picks from 9 generation units
     (Gen 8 = Galar + Hisui together) instead of 10 individual regions."""
