@@ -149,6 +149,28 @@ class FillerWeights(OptionCounter):
         return super().from_any(data)
 
 
+class LocalFillerPercent(NamedRange):
+    """Percentage of this world's own filler items to force into this world's own
+    locations before the multiworld fill runs, keeping them out of other players'
+    games. Only filler is localized (Pokedex, Pokegear, Master Ball, Shiny Charm,
+    traps, and the splash filler); progression and useful gate items are never
+    localized, so the seed stays completable and cross-game progression is
+    unaffected. Higher values keep more of Pokepelago's large Dexsanity filler pool
+    out of an async/multiworld.
+
+    Dexsanity can create up to ~1025 'Guess {Pokemon}' locations, which forces an
+    equally large filler pool; without this, most of that filler floods other games.
+    'off' (0) keeps the classic behavior. 'auto' (-1, the default) scales a forced
+    minimum by how inflated the pool is: 0 when Dexsanity is off, otherwise 50% for
+    one region and +10% per additional region, capped at 90% so some filler still
+    travels to the rest of the multiworld."""
+    display_name = "Local Filler Percent"
+    range_start = 0
+    range_end = 100
+    special_range_names = {"off": 0, "auto": -1}
+    default = -1
+
+
 class TrapWeights(OptionCounter):
     """Controls the relative weight of each trap type when a trap slot is filled.
     Higher values mean that trap appears more often. Set a trap to 0 to disable it entirely.
@@ -474,6 +496,7 @@ class PokepelagoOptions(PerGameCommonOptions):
     trap_chance: TrapChance
     trap_weights: TrapWeights
     filler_weights: FillerWeights
+    local_filler_percent: LocalFillerPercent
     # Legacy region toggles (hidden, backward compat only)
     include_kanto: IncludeKanto
     include_johto: IncludeJohto
@@ -492,5 +515,5 @@ pokepelago_option_groups: list[OptionGroup] = [
     OptionGroup("Lock Gates", [EnableTypeLocks, RouteLocks, LineLocks, BadgeLevelGating,
                                LegendaryLocks, TradeLocks, BabyLocks, DaycareCount,
                                FossilLocks, UltraBeastLocks, ParadoxLocks, StoneLocks], start_collapsed=True),
-    OptionGroup("Items", [IncludeShinies, MasterBallBypassGates, PokegearPokedexFiller, StopAutosubmitOnGoal, TrapChance, TrapWeights, FillerWeights], start_collapsed=True),
+    OptionGroup("Items", [IncludeShinies, MasterBallBypassGates, PokegearPokedexFiller, StopAutosubmitOnGoal, TrapChance, TrapWeights, FillerWeights, LocalFillerPercent], start_collapsed=True),
 ]

@@ -737,6 +737,99 @@ class PokepelagoWorld(World):
             self.multiworld.itempool.append(self.create_item(filler_name))
             my_items_in_pool += 1
 
+    # ── Local filler pre-fill (FEAT-15: keep our filler out of other games) ───────
+
+    def _effective_local_filler_percent(self) -> int:
+        """Resolve local_filler_percent, including the 'auto' (-1) forced-minimum
+        mode that scales with how inflated this world's filler pool is."""
+        raw = self.options.local_filler_percent.value
+        if raw >= 0:
+            return raw
+        # auto: Dexsanity off -> no flood -> 0. Dexsanity on -> 50% baseline, +10%
+        # per region beyond the first, capped at 90% so some filler still travels.
+        if not self.options.dexsanity.value:
+            return 0
+        n_regions = len(self.active_regions)
+        return min(90, 50 + 10 * max(0, n_regions - 1))
+
+    def pre_fill(self) -> None:
+        """Place a configurable fraction of THIS world's own filler into THIS
+        world's own locations, locked, before the multiworld fill. Only filler is
+        localized; progression and useful gate items stay in the pool so the seed
+        remains completable and cross-game progression is unchanged. Runs after item
+        plando, so any player-specified plando wins -- we only consume locations and
+        filler that plando did not already claim.
+        """
+        pct = self._effective_local_filler_percent()
+        if pct <= 0:
+            return
+
+        # Lazy import: importing Fill at this world module's top level perturbs AP's
+        # world-load order and triggers a circular import in other worlds.
+        from Fill import sweep_from_pool, fill_restrictive
+
+        mw = self.multiworld
+        player = self.player
+
+        # Item names Pokepelago treats as filler from the PLAYER'S point of view.
+        # This deliberately INCLUDES Pokedex/Pokegear/Master Ball and Shiny Charm
+        # even though AP classifies some of them as `useful`, because those are
+        # exactly the items the community calls filler. Traps are derived from the
+        # item table so new traps are picked up automatically. Progression items
+        # (Type Keys, Region Passes, Line Unlocks, gate items) are NEVER in this set.
+        localizable: set = set()
+        for names in FILLER_ITEM_CATEGORIES.values():
+            localizable.update(names)
+        localizable.update(name for name, (_id, cls) in item_data_table.items()
+                           if cls == ItemClassification.trap)
+        localizable.add("Shiny Charm")
+
+        # Our own localizable filler still in the pool. Matched by name AND the
+        # (not advancement) safety net so a future reclassification can never let a
+        # progression item slip into the localized set.
+        my_filler = [it for it in mw.itempool
+                     if it.player == player and not it.advancement and it.name in localizable]
+        if not my_filler:
+            return
+
+        # Our own currently-unfilled, real (addressable) locations.
+        my_locations = [loc for loc in mw.get_unfilled_locations(player)
+                        if loc.address is not None]
+        if not my_locations:
+            return
+
+        # Localize ceil(pct%) of our filler, bounded by available local locations.
+        target = (len(my_filler) * pct + 99) // 100  # ceil
+        n = min(target, len(my_locations))
+        if n <= 0:
+            return
+
+        self.random.shuffle(my_filler)
+        self.random.shuffle(my_locations)
+        chosen_items = my_filler[:n]
+        chosen_locs = my_locations[:n]
+
+        # Remove chosen items from the global pool so main fill won't place them.
+        chosen_set = {id(it) for it in chosen_items}
+        mw.itempool[:] = [it for it in mw.itempool if id(it) not in chosen_set]
+
+        # Maximum-exploration state: sweep collecting the whole remaining pool so our
+        # own gated locations (Type/Region/gate-locked "Guess {mon}") count as
+        # reachable for filler placement. Filler is fungible and lands in LOCKED
+        # locations, so collecting the pool for the access check cannot change logic
+        # or completability -- it only stops a locks-heavy world from being unable to
+        # localize its own filler (bare-state reachability can be ~2% with locks on).
+        state = sweep_from_pool(mw.state, mw.itempool + chosen_items)
+        fill_restrictive(
+            mw, state, chosen_locs, chosen_items,
+            single_player_placement=True, lock=True, swap=False,
+            allow_partial=True, name=f"Pokepelago Local Filler P{player}",
+        )
+        # Any filler that couldn't be placed locally goes back to the pool so it is
+        # still placed somewhere -- never dropped (preserves items == locations).
+        if chosen_items:
+            mw.itempool.extend(chosen_items)
+
     # ── Region & rule creation ──────────────────────────────────────────────────
 
     def create_regions(self) -> None:
