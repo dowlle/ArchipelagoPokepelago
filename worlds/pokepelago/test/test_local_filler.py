@@ -162,18 +162,19 @@ class TestLocalFillerMultiworld(unittest.TestCase):
         self.assertLess(remote_hi, remote_off,
                         f"90% local ({remote_hi}) should send out less than 0% ({remote_off})")
 
-    def test_sweep_not_throttled_under_locks(self):
-        """The max-exploration sweep must let a locks-heavy world localize near its
-        target. Without the sweep, bare-state reachability is ~2% and localization
-        collapses; this guards that regression."""
+    def test_localizes_target_under_locks(self):
+        """A locks-heavy world must still localize near its target percentage. Filler
+        is placed with place_locked_item (no reachability gate), so gated 'Guess {mon}'
+        locations are usable; this guards against a regression that throttles
+        localization under locks."""
         mw = setup_multiworld([WORLD_TYPE, WORLD_TYPE],
                               options=[{**LOCKS_2R, "local_filler_percent": 90}] * 2, seed=303)
         frac, localized, total = _local_filler_fraction(mw, 1)
         self.assertGreater(total, 50, "expected a large filler pool with dexsanity on")
         self.assertGreaterEqual(
             frac, 0.8,
-            f"only {frac:.0%} localized ({localized}/{total}); the reachability sweep "
-            f"is likely throttling under locks")
+            f"only {frac:.0%} localized ({localized}/{total}); localization is being "
+            f"throttled under locks")
 
     def test_dexsanity_off_auto_is_noop(self):
         """auto with dexsanity off resolves to 0% and localizes nothing."""

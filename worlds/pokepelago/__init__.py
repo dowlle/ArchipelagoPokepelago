@@ -753,20 +753,22 @@ class PokepelagoWorld(World):
         return min(90, 50 + 10 * max(0, n_regions - 1))
 
     def pre_fill(self) -> None:
-        """Place a configurable fraction of THIS world's own filler into THIS
-        world's own locations, locked, before the multiworld fill. Only filler is
-        localized; progression and useful gate items stay in the pool so the seed
-        remains completable and cross-game progression is unchanged. Runs after item
-        plando, so any player-specified plando wins -- we only consume locations and
-        filler that plando did not already claim.
+        """Lock a configurable fraction of THIS world's own filler onto THIS world's
+        own locations before the multiworld fill, removing it from the shared pool so
+        it stops flooding other players' games. Only filler is localized; progression
+        and useful gate items stay in the pool.
+
+        Only runs in a MULTIWORLD (players > 1). In a solo game there are no other
+        games to protect, and locking filler into this world's own gated locations
+        would starve its own progression of reachable spots -- so it is a no-op solo.
+        This matches the proven TUNIC ``local_fill`` pattern: because progression can
+        be placed into ANY player's locations in a multiworld, locking our filler into
+        our own locations never blocks our own keys (they simply land elsewhere), so
+        the seed stays completable and cross-game progression is unchanged.
         """
         pct = self._effective_local_filler_percent()
-        if pct <= 0:
+        if pct <= 0 or self.multiworld.players <= 1:
             return
-
-        # Lazy import: importing Fill at this world module's top level perturbs AP's
-        # world-load order and triggers a circular import in other worlds.
-        from Fill import sweep_from_pool, fill_restrictive
 
         mw = self.multiworld
         player = self.player
@@ -792,9 +794,17 @@ class PokepelagoWorld(World):
         if not my_filler:
             return
 
-        # Our own currently-unfilled, real (addressable) locations.
+        # Reserve a couple of immediately-reachable (sphere-1) locations so we never
+        # lock filler into every early location this world exposes to the multiworld
+        # bootstrap. Skip plando/priority locations too (they are claimed elsewhere).
+        sphere_one = mw.get_reachable_locations(CollectionState(mw), player)
+        reserved = set()
+        if sphere_one:
+            reserved = set(self.random.sample(sphere_one, min(2, len(sphere_one))))
+        priority = self.options.priority_locations.value
         my_locations = [loc for loc in mw.get_unfilled_locations(player)
-                        if loc.address is not None]
+                        if loc.address is not None and loc not in reserved
+                        and loc.name not in priority]
         if not my_locations:
             return
 
@@ -806,29 +816,19 @@ class PokepelagoWorld(World):
 
         self.random.shuffle(my_filler)
         self.random.shuffle(my_locations)
-        chosen_items = my_filler[:n]
-        chosen_locs = my_locations[:n]
+        placed_ids = set()
+        loc_iter = iter(my_locations)
+        for item in my_filler[:n]:
+            for loc in loc_iter:
+                if loc.item is None:  # another world may have pre-filled it
+                    loc.place_locked_item(item)
+                    placed_ids.add(id(item))
+                    break
 
-        # Remove chosen items from the global pool so main fill won't place them.
-        chosen_set = {id(it) for it in chosen_items}
-        mw.itempool[:] = [it for it in mw.itempool if id(it) not in chosen_set]
-
-        # Maximum-exploration state: sweep collecting the whole remaining pool so our
-        # own gated locations (Type/Region/gate-locked "Guess {mon}") count as
-        # reachable for filler placement. Filler is fungible and lands in LOCKED
-        # locations, so collecting the pool for the access check cannot change logic
-        # or completability -- it only stops a locks-heavy world from being unable to
-        # localize its own filler (bare-state reachability can be ~2% with locks on).
-        state = sweep_from_pool(mw.state, mw.itempool + chosen_items)
-        fill_restrictive(
-            mw, state, chosen_locs, chosen_items,
-            single_player_placement=True, lock=True, swap=False,
-            allow_partial=True, name=f"Pokepelago Local Filler P{player}",
-        )
-        # Any filler that couldn't be placed locally goes back to the pool so it is
-        # still placed somewhere -- never dropped (preserves items == locations).
-        if chosen_items:
-            mw.itempool.extend(chosen_items)
+        # Remove everything we actually locked from the shared pool. Anything we
+        # could not place stays in the pool untouched (preserves items == locations).
+        if placed_ids:
+            mw.itempool[:] = [it for it in mw.itempool if id(it) not in placed_ids]
 
     # ── Region & rule creation ──────────────────────────────────────────────────
 
