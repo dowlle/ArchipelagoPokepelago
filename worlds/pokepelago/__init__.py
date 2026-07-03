@@ -758,13 +758,15 @@ class PokepelagoWorld(World):
         it stops flooding other players' games. Only filler is localized; progression
         and useful gate items stay in the pool.
 
-        Only runs in a MULTIWORLD (players > 1). In a solo game there are no other
-        games to protect, and locking filler into this world's own gated locations
-        would starve its own progression of reachable spots -- so it is a no-op solo.
-        This matches the proven TUNIC ``local_fill`` pattern: because progression can
-        be placed into ANY player's locations in a multiworld, locking our filler into
-        our own locations never blocks our own keys (they simply land elsewhere), so
-        the seed stays completable and cross-game progression is unchanged.
+        Localizing is only safe when the REST of the multiworld has room to absorb
+        this world's own progression. Because we lock filler into our own (possibly
+        gated) locations, our own keys must be placeable elsewhere; if they can't be
+        (a solo game, or a multiworld whose only other worlds have too few locations,
+        e.g. the fuzzer's Empty static world), locking filler here would starve our
+        own progression and the fill would raise a FillError. So we require the other
+        players to have at least as many unfilled locations as we have advancement
+        items, plus a buffer. This generalizes the TUNIC ``local_fill`` players>1
+        guard, which silently assumes the other worlds actually carry locations.
         """
         pct = self._effective_local_filler_percent()
         if pct <= 0 or self.multiworld.players <= 1:
@@ -772,6 +774,16 @@ class PokepelagoWorld(World):
 
         mw = self.multiworld
         player = self.player
+
+        # How much of our own progression could be forced elsewhere, and how much
+        # room the rest of the multiworld has for it. If the rest can't hold our
+        # progression, do not localize -- our own gated locations must stay free.
+        own_advancement = sum(1 for it in mw.itempool
+                              if it.player == player and it.advancement)
+        other_unfilled = sum(1 for loc in mw.get_unfilled_locations()
+                             if loc.player != player and loc.address is not None)
+        if other_unfilled < own_advancement + 8:
+            return
 
         # Item names Pokepelago treats as filler from the PLAYER'S point of view.
         # This deliberately INCLUDES Pokedex/Pokegear/Master Ball and Shiny Charm
