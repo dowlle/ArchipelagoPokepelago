@@ -69,6 +69,12 @@ class PokepelagoWorld(World):
 
         # Route/line locks require dexsanity (not enough milestone locations to hold all keys)
         if (o.route_locks_enabled.value or o.line_locks.value) and not o.dexsanity.value:
+            import logging
+            logging.warning(
+                "Pokepelago: Dexsanity was automatically enabled because Route Locks or "
+                "Line Locks is on (milestone-only locations aren't enough to hold all the "
+                "keys those locks add to the item pool)."
+            )
             o.dexsanity.value = 1
 
         self._select_active_regions()

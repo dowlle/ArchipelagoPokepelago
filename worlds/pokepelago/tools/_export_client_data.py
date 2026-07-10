@@ -101,12 +101,13 @@ output = {
     "badgeRequirements": badge_requirements,
 }
 
-out_path = Path("D:/pythonProjects/PokepelagoClient/src/data/route_data.json")
-out_path.write_text(json.dumps(output, separators=(",", ":")), encoding="utf-8")
-size_kb = out_path.stat().st_size / 1024
-print(f"Wrote {out_path} ({size_kb:.0f} KB)")
+if __name__ == "__main__":
+    out_path = Path("D:/pythonProjects/PokepelagoClient/src/data/route_data.json")
+    out_path.write_text(json.dumps(output, separators=(",", ":")), encoding="utf-8")
+    size_kb = out_path.stat().st_size / 1024
+    print(f"Wrote {out_path} ({size_kb:.0f} KB)")
 
-# Also human-readable version for inspection
-out_pretty = Path("D:/pythonProjects/PokepelagoClient/src/data/route_data_pretty.json")
-out_pretty.write_text(json.dumps(output, indent=2), encoding="utf-8")
-print(f"Wrote {out_pretty} ({out_pretty.stat().st_size / 1024:.0f} KB)")
+    # Also human-readable version for inspection
+    out_pretty = Path("D:/pythonProjects/PokepelagoClient/src/data/route_data_pretty.json")
+    out_pretty.write_text(json.dumps(output, indent=2), encoding="utf-8")
+    print(f"Wrote {out_pretty} ({out_pretty.stat().st_size / 1024:.0f} KB)")
