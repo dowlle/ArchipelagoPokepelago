@@ -9,7 +9,8 @@ from .Items import (PokepelagoItem, item_table, item_data_table, GEN_1_TYPES, FI
 from .Locations import (PokepelagoLocation, location_table, milestones, starting_locations,
                         TYPE_MILESTONE_STEPS, DEXSANITY_OFF_EXTRA_STEPS, ROUTE_MILESTONE_NAMES)
 from .Options import PokepelagoOptions, pokepelago_option_groups, _LEGACY_REGION_MAP
-from .data import (POKEMON_DATA, GAME_REGIONS, GAME_GENERATIONS, REGION_RANGES, STARTERS_BY_REGION, get_pokemon_region,
+from .data import (POKEMON_DATA, GAME_REGIONS, GAME_GENERATIONS, REGION_RANGES, REGION_MON_COUNTS,
+                   MICRO_REGION_MON_THRESHOLD, STARTERS_BY_REGION, get_pokemon_region,
                    LEGENDARY_SUB_IDS, LEGENDARY_BOX_IDS, LEGENDARY_MYTHIC_IDS,
                    BABY_IDS, TRADE_EVO_IDS, FOSSIL_IDS, ULTRA_BEAST_IDS, PARADOX_IDS,
                    STONE_EVO_GROUPS)
@@ -130,6 +131,22 @@ class PokepelagoWorld(World):
         else:
             count = min(rrc, max_count)
 
+        # BUG-25 (F1): never *offer* a lone micro-region. A region under
+        # MICRO_REGION_MON_THRESHOLD mons (only Hisui's 7 today) has ~37 locations, nearly
+        # all of them self-gated, so as the sole active region it cannot seed a heavy lock
+        # stack's progression chain and fill raises "No more spots to place N items".
+        # Any set of 2+ regions is safe (the partner region supplies hundreds of ungated
+        # locations), so the filter applies only to single-unit rolls: Hisui stays fully
+        # rollable in every 2+ combination and the distribution is otherwise untouched.
+        # This changes what random selection offers, never the player's chosen locks, so
+        # PERF-15's "locks stay genuinely on" decision is intact. The manual `regions:`
+        # list is deliberately NOT filtered: an explicit Hisui-solo request is honored.
+        if count == 1:
+            viable = [group for group in pool
+                      if sum(REGION_MON_COUNTS[r] for r in group) >= MICRO_REGION_MON_THRESHOLD]
+            if viable:  # if every unit were micro-sized, fall back to the full pool
+                pool = viable
+
         selected = self.random.sample(pool, count)
         self.active_regions = sorted(
             [region for group in selected for region in group],
@@ -164,7 +181,7 @@ class PokepelagoWorld(World):
             o.stone_locks.value = 0
 
         # Badge gating with very few Pokemon is pointless (levels don't differentiate)
-        if o.badge_level_gating.value and len(active_ids) < 20:
+        if o.badge_level_gating.value and len(active_ids) < MICRO_REGION_MON_THRESHOLD:
             o.badge_level_gating.value = 0
 
         # Ensure enough starting locations when multiple gates are active
@@ -177,6 +194,26 @@ class PokepelagoWorld(World):
         if gate_count >= 2:
             min_starts = min(gate_count, 8)
             o.starting_location_count.value = max(o.starting_location_count.value, min_starts)
+
+        # BUG-25 (F4): the residual hand-crafted case. Random selection can no longer roll a
+        # lone micro-region (see _select_active_regions), but an explicit
+        # `regions: [Hisui]` + `random_region_count: 0` is still honored on purpose, and with
+        # a heavy lock stack it can genuinely FillError. Warn with the mitigation instead of
+        # thinning the locks: per PERF-15 the world never silently disables a chosen lock.
+        if (len(self.active_regions) == 1
+                and len(active_ids) < MICRO_REGION_MON_THRESHOLD
+                and gate_count >= 2):
+            import logging
+            logging.warning(
+                f"Pokepelago: '{self.active_regions[0]}' is your only active region and has just "
+                f"{len(active_ids)} Pokemon, while {gate_count} lock options are on. That region "
+                f"supplies roughly {len(active_ids) + 30} locations, almost all of them behind the "
+                f"very keys that need placing, so generation may fail with a FillError "
+                f"('No more spots to place N items'). Fixes: add a second region to 'regions' "
+                f"(Galar is the natural partner for Hisui; note 'group_hisui_galar' only affects "
+                f"random selection, not this manual list), or turn some lock options off. "
+                f"Options left as chosen."
+            )
 
     def _select_starter(self) -> None:
         """Choose starting region and starter Pokemon.

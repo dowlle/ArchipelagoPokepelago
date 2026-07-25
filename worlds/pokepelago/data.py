@@ -1055,6 +1055,21 @@ GAME_REGIONS: list[str] = list(REGION_DATA.keys())
 REGION_RANGES: dict[str, tuple[int, int]] = {r: d["range"] for r, d in REGION_DATA.items()}
 STARTERS_BY_REGION: dict[str, list[str]] = {r: d["starters"] for r, d in REGION_DATA.items()}
 
+# How many Pokemon each region actually contributes. Counted from POKEMON_DATA rather
+# than from (hi - lo + 1) so it stays honest if a dex range ever has gaps.
+REGION_MON_COUNTS: dict[str, int] = {
+    region: sum(1 for m in POKEMON_DATA if lo <= m["id"] <= hi)
+    for region, (lo, hi) in REGION_RANGES.items()
+}
+
+# A region with fewer than this many Pokemon is "degenerate": its location pool is too
+# small and too deeply self-gated to seed a heavy lock stack's progression chain, and
+# level-based badge gating stops differentiating anything. Today only Hisui (7 mons)
+# is under it; the next smallest region is Kalos at 72. Used by _select_active_regions
+# (keeps a micro-region from being rolled as the *only* region) and by
+# _prune_invalid_gates (drops badge_level_gating).
+MICRO_REGION_MON_THRESHOLD = 20
+
 # Generation-based grouping (Gen 8 = Galar + Hisui as a single unit).
 # Used by random_region_count when group_hisui_galar is enabled.
 _gen_numbers = sorted(set(d["gen"] for d in REGION_DATA.values()))
