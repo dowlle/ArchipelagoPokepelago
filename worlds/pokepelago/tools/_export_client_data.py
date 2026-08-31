@@ -121,16 +121,17 @@ output = {
     "badgeRequirements": badge_requirements,
 }
 
-_arg = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("POKEPELAGO_CLIENT_DATA_DIR")
-out_dir = Path(_arg) if _arg else Path("D:/pythonProjects/PokepelagoClient/src/data")
-out_dir.mkdir(parents=True, exist_ok=True)
+if __name__ == "__main__":
+    _arg = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("POKEPELAGO_CLIENT_DATA_DIR")
+    out_dir = Path(_arg) if _arg else Path("D:/pythonProjects/PokepelagoClient/src/data")
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-out_path = out_dir / "route_data.json"
-out_path.write_text(json.dumps(output, separators=(",", ":")), encoding="utf-8")
-size_kb = out_path.stat().st_size / 1024
-print(f"Wrote {out_path} ({size_kb:.0f} KB)")
+    out_path = out_dir / "route_data.json"
+    out_path.write_text(json.dumps(output, separators=(",", ":")), encoding="utf-8")
+    size_kb = out_path.stat().st_size / 1024
+    print(f"Wrote {out_path} ({size_kb:.0f} KB)")
 
-# Also human-readable version for inspection
-out_pretty = out_dir / "route_data_pretty.json"
-out_pretty.write_text(json.dumps(output, indent=2), encoding="utf-8")
-print(f"Wrote {out_pretty} ({out_pretty.stat().st_size / 1024:.0f} KB)")
+    # Also human-readable version for inspection
+    out_pretty = out_dir / "route_data_pretty.json"
+    out_pretty.write_text(json.dumps(output, indent=2), encoding="utf-8")
+    print(f"Wrote {out_pretty} ({out_pretty.stat().st_size / 1024:.0f} KB)")

@@ -277,8 +277,11 @@ class RouteLocks(Toggle):
     Routes are grouped into meaningful areas (e.g. Melemele Island, Wild Area
     North, Hoenn Early Routes). Each area adds one Route Key to the item pool.
     A Pokemon is accessible if you have ANY area key for a route it appears on.
-    Forces Dexsanity ON (needed for enough locations to hold all Route Keys).
-    Note: enabling this will auto-disable Line Locks if both are on.
+    Forces Dexsanity ON if it isn't already (needed for enough locations to
+    hold all Route Keys); a logging.warning fires when that mutation happens.
+    Route Locks and Line Locks compose independently and no longer auto-disable
+    each other -- the two gating axes are orthogonal (they gate by different
+    things: where a Pokemon is found vs. its evolution family).
 
     YAML key: route_locks_enabled (NOT route_locks). The dataclass attribute
     in PokepelagoOptions uses the _enabled suffix; AP silently ignores unknown
@@ -293,10 +296,14 @@ class LineLocks(Toggle):
     Every active evolution family adds one Line Unlock to the item pool.
     Required for ALL members of the family (base forms and evolutions).
     Evolution-only Pokemon inherit route access from their base form.
-    Forces Dexsanity ON (needed for enough locations to hold all Line Unlocks).
-    Auto-disabled when Route Locks is also enabled, or when the active
-    region pool is too small for the number of progression items it
-    would create (prevents fill algorithm failures).
+    Forces Dexsanity ON if it isn't already (needed for enough locations to
+    hold all Line Unlocks); a logging.warning fires when that mutation happens.
+    Composes independently with Route Locks (no longer auto-disabled when
+    Route Locks is also on). When the active region pool is too small for
+    the number of progression items Line Locks would create, generation only
+    *warns* about the estimated progression-to-location ratio -- it never
+    silently disables the option (see the -- GENERATION PERFORMANCE -- note
+    below for the heuristic and its threshold).
 
     -- GENERATION PERFORMANCE -------------------------------------------------
     Line Locks is the single biggest cost on generation time, because it adds
@@ -310,10 +317,11 @@ class LineLocks(Toggle):
     ...pushes the progression-item count into the 700-900 range. `fill_restrictive`
     complexity scales with progression-items x locations, so these configs can
     take 30-60s to generate on modest hardware (vs. <5s for typical configs).
-    The heuristic at `__init__.py:76-99` auto-disables Line Locks when the
-    estimated progression-to-location ratio exceeds 55% -- this prevents
-    outright FillErrors but not slow-but-completes generation. If you want
-    all-locks-on with many regions, be prepared to wait on generation."""
+    The heuristic at `__init__.py:90-108` only WARNS (via logging.warning) when the
+    estimated progression-to-location ratio exceeds 55% -- it no longer disables
+    Line Locks. This flags likely FillError risk but not slow-but-completes
+    generation. If you want all-locks-on with many regions, be prepared to
+    wait on generation."""
     display_name = "Line Locks"
     default = 0
 
