@@ -57,7 +57,18 @@ class Regions(OptionSet):
     At least one region is always active (defaults to Kanto if the list is empty).
     This manual list is honored by default. It is ONLY ignored if you set
     'random_region_count' to a non-zero value, which randomizes the regions instead.
-    Valid regions: Kanto, Johto, Hoenn, Sinnoh, Unova, Kalos, Alola, Galar, Hisui, Paldea."""
+    Valid regions: Kanto, Johto, Hoenn, Sinnoh, Unova, Kalos, Alola, Galar, Hisui, Paldea.
+
+    KNOWN CORNER, Hisui on its own: Hisui has only 7 Pokemon, where every other region has
+    72 or more. It supplies roughly 37 locations and nearly all of them sit behind the very
+    keys that need placing. So 'regions: [Hisui]' with nothing else AND a heavy stack of lock
+    options (type + line + route + legendary + badge + the category locks) can fail
+    generation with 'FillError: No more spots to place N items'. This is allowed on purpose
+    instead of being quietly patched around: the world never silently disables a lock you
+    chose, and generation prints a warning naming the fix before it tries. The fix is to add
+    a second region (Galar is the natural partner for Hisui) or to turn some lock options
+    off. Random selection will never hand you a lone Hisui by accident, so you only reach
+    this by asking for it here. Hisui together with any other region is perfectly safe."""
     display_name = "Regions"
     valid_keys = frozenset(GAME_REGIONS)
     default = frozenset({"Kanto"})
@@ -71,7 +82,12 @@ class RandomRegionCount(NamedRange):
     (or generations if grouping is on).
     Set to random to also randomize how many are picked.
     When 'Group Hisui & Galar' is enabled, this picks from 9 generation units
-    (Gen 8 = Galar + Hisui together) instead of 10 individual regions."""
+    (Gen 8 = Galar + Hisui together) instead of 10 individual regions.
+    One guard rail: when the roll comes out to a single unit, regions with fewer than 20
+    Pokemon are left out of that draw, because a lone 7-Pokemon Hisui cannot hold a heavy
+    lock stack's keys and would crash generation. Hisui stays fully available in every roll
+    of two or more regions, and your lock choices are never touched. If you actually want a
+    solo micro-region, ask for it directly with the manual 'regions' list."""
     display_name = "Random Region Count"
     range_start = 0
     range_end = 10
@@ -83,7 +99,11 @@ class GroupHisuiGalar(Toggle):
     """When enabled, Galar and Hisui are treated as a single 'Gen 8' unit
     for random region selection. Picking Gen 8 always includes both regions.
     When disabled, Galar and Hisui are independent picks.
-    Only affects random_region_count; the manual Regions list is unaffected."""
+    Only affects random_region_count; the manual Regions list is unaffected.
+    Leaving this on is the friendliest setting for Hisui, since it guarantees Hisui always
+    arrives with Galar's 89 Pokemon behind it. With it off, Hisui can still be rolled in any
+    multi-region set; it just can never be rolled as the only region (see
+    'random_region_count')."""
     display_name = "Group Hisui & Galar"
     default = 1
 
