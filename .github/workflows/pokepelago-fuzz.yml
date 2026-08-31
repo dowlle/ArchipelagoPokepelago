@@ -35,10 +35,20 @@ jobs:
         run: |
           curl -SsL -o archipelago/fuzz.py https://raw.githubusercontent.com/Eijebong/Archipelago-fuzzer/718106c3a345e65614f147e3210a15e71ee3cfb6/fuzz.py
 
+      # DEVEX-16 Phase 2: install the client item-decode hook next to fuzz.py so
+      # it is importable as hooks.client_item_decode. Pure-Python cross-check of
+      # every placed Route Key / Line Unlock / Region Pass / Type Key / gate item
+      # against a port of the client's decoders — catches BUG-12-class ID drift.
+      - name: Install client item-decode fuzz hook
+        shell: bash
+        run: |
+          mkdir -p archipelago/hooks
+          cp worlds/pokepelago/tools/fuzz/client_item_decode.py archipelago/hooks/client_item_decode.py
+
       - name: Run fuzzer (60s per-seed timeout, matches local run_fuzz.sh)
         shell: bash
         run: |
-          cd archipelago && uv run python fuzz.py -j 4 -g ${{ steps.copy.outputs.apworld-name }} -r 500 -n 1 -t 60
+          cd archipelago && uv run python fuzz.py -j 4 -g ${{ steps.copy.outputs.apworld-name }} -r 500 -n 1 -t 60 --hook hooks.client_item_decode:Hook
 
       - name: Upload fuzzer failures
         if: failure()
