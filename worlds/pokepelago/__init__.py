@@ -202,24 +202,26 @@ class PokepelagoWorld(World):
             min_starts = min(gate_count, 8)
             o.starting_location_count.value = max(o.starting_location_count.value, min_starts)
 
-        # BUG-25 (F4): the residual hand-crafted case. Random selection can no longer roll a
-        # lone micro-region (see _select_active_regions), but an explicit
-        # `regions: [Hisui]` + `random_region_count: 0` is still honored on purpose, and with
-        # a heavy lock stack it can genuinely FillError. Warn with the mitigation instead of
-        # thinning the locks: per PERF-15 the world never silently disables a chosen lock.
+        # BUG-25 (F4, hardened 2026-08-31): the residual hand-crafted case. Random selection
+        # can no longer roll a lone micro-region (see _select_active_regions), but an explicit
+        # `regions: [Hisui]` + `random_region_count: 0` with a heavy lock stack genuinely
+        # FillErrors often enough that the old warning just delayed a cryptic crash. Reject
+        # the combination up front as an invalid option set instead: the player gets the
+        # mitigation immediately, and generation never silently disables a chosen lock
+        # (PERF-15) nor dies mid-fill. OptionError is also the exception class generation
+        # tooling (fuzzers included) recognises as "invalid YAML, not a world bug".
         if (len(self.active_regions) == 1
                 and len(active_ids) < MICRO_REGION_MON_THRESHOLD
                 and gate_count >= 2):
-            import logging
-            logging.warning(
+            from Options import OptionError
+            raise OptionError(
                 f"Pokepelago: '{self.active_regions[0]}' is your only active region and has just "
                 f"{len(active_ids)} Pokemon, while {gate_count} lock options are on. That region "
                 f"supplies roughly {len(active_ids) + 30} locations, almost all of them behind the "
-                f"very keys that need placing, so generation may fail with a FillError "
+                f"very keys that need placing, so generation would fail with a FillError "
                 f"('No more spots to place N items'). Fixes: add a second region to 'regions' "
                 f"(Galar is the natural partner for Hisui; note 'group_hisui_galar' only affects "
-                f"random selection, not this manual list), or turn some lock options off. "
-                f"Options left as chosen."
+                f"random selection, not this manual list), or turn some lock options off."
             )
 
     def _select_starter(self) -> None:

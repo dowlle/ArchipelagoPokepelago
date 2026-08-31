@@ -7,6 +7,7 @@ sub-threshold regions from single-unit random draws, while leaving multi-region 
 the manual `regions:` list completely alone.
 """
 import random
+import unittest
 
 from test.bases import WorldTestBase
 from worlds.pokepelago.data import (GAME_REGIONS, GAME_GENERATIONS, REGION_MON_COUNTS,
@@ -114,3 +115,22 @@ class TestManualMicroRegionSoloStillHonored(WorldTestBase):
 
     def test_manual_solo_hisui_is_respected(self):
         self.assertEqual(self.world.active_regions, ["Hisui"])
+
+
+class TestManualMicroRegionHeavyLocksRejected(unittest.TestCase):
+    """F4 hardening (2026-08-31): an explicit solo micro-region plus two or more lock
+    options is rejected up front with OptionError (which generation tooling treats as
+    invalid YAML), instead of proceeding into a likely mid-fill FillError."""
+
+    def test_solo_hisui_with_two_locks_raises_option_error(self):
+        from Options import OptionError
+        from test.general import setup_multiworld
+        from worlds.pokepelago import PokepelagoWorld
+        with self.assertRaises(OptionError) as ctx:
+            setup_multiworld(PokepelagoWorld, options={
+                "regions": {"Hisui"},
+                "random_region_count": 0,
+                "type_locks": 1,
+                "line_locks": 1,
+            })
+        self.assertIn("only active region", str(ctx.exception))
