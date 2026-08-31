@@ -5,7 +5,7 @@ from BaseClasses import Region, Entrance, ItemClassification, Tutorial, Collecti
 from rule_builder.rules import Has, HasAll, HasAllCounts, HasAny
 from worlds.AutoWorld import World, WebWorld
 from .Items import (PokepelagoItem, item_table, item_data_table, GEN_1_TYPES, FILLER_ITEM_CATEGORIES,
-                    ROUTE_KEY_NAMES, LINE_UNLOCK_NAMES)
+                    ROUTE_KEY_NAMES, LINE_UNLOCK_NAMES, ITEM_NAME_GROUPS)
 from .Locations import (PokepelagoLocation, location_table, milestones, starting_locations,
                         TYPE_MILESTONE_STEPS, DEXSANITY_OFF_EXTRA_STEPS, ROUTE_MILESTONE_NAMES)
 from .Options import PokepelagoOptions, pokepelago_option_groups, _LEGACY_REGION_MAP
@@ -51,6 +51,7 @@ class PokepelagoWorld(World):
 
     item_name_to_id = item_table
     location_name_to_id = location_table
+    item_name_groups = ITEM_NAME_GROUPS
 
     # ── Core generation pipeline ────────────────────────────────────────────────
 
